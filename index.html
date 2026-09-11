@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Saha Seçim & Strateji Yönetim Paneli</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { -webkit-tap-highlight-color: transparent; }
+    .status-badge { transition: all 0.2s ease; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans pb-28">
+
+  <!-- Üst Bar & Navigasyon -->
+  <header class="sticky top-0 z-30 bg-slate-900 text-white px-4 py-3 shadow-lg">
+    <div class="flex justify-between items-center mb-2">
+      <div>
+        <h1 class="text-base font-bold text-white tracking-wide">Saha Karargah & Seçim Paneli</h1>
+        <p class="text-xs text-slate-400" id="currentArea">Sultangazi / 50. Yıl Mahallesi</p>
+      </div>
+      <div class="flex gap-2">
+        <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-xs px-2.5 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-file-excel text-emerald-400"></i> Excel Yükle
+          <input type="file" id="excelInput" accept=".xlsx, .xls" class="hidden">
+        </label>
+        <button onclick="exportReport()" class="bg-indigo-600 hover:bg-indigo-500 text-xs px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-download"></i> Rapor
+        </button>
+      </div>
+    </div>
+
+    <!-- Sekmeler: Saha Listesi vs Strateji Analizi -->
+    <div class="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-slate-800">
+      <button onclick="switchTab('list')" id="tab-list-btn" class="py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white transition">
+        <i class="fa-solid fa-users mr-1"></i> Üye / Seçmen Listesi
+      </button>
+      <button onclick="switchTab('analytics')" id="tab-analytics-btn" class="py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-300 transition">
+        <i class="fa-solid fa-chart-pie mr-1"></i> Strateji & Öneriler
+      </button>
+    </div>
+  </header>
+
+  <!-- SEKME 1: SAHA LİSTESİ VE EĞİLİM GİRİŞİ -->
+  <div id="section-list">
+    <!-- Renk İstatistik Özeti -->
+    <div class="bg-white px-4 py-2.5 border-b border-slate-200 grid grid-cols-4 gap-2 text-center text-xs font-semibold">
+      <div class="bg-blue-50 text-blue-700 p-1.5 rounded-lg border border-blue-200">
+        <div class="text-[10px] text-blue-500 font-normal">Bizim Aday</div>
+        <div id="stat-blue" class="text-sm font-bold">0</div>
+      </div>
+      <div class="bg-red-50 text-red-700 p-1.5 rounded-lg border border-red-200">
+        <div class="text-[10px] text-red-500 font-normal">Rakip Aday</div>
+        <div id="stat-red" class="text-sm font-bold">0</div>
+      </div>
+      <div class="bg-amber-50 text-amber-700 p-1.5 rounded-lg border border-amber-200">
+        <div class="text-[10px] text-amber-500 font-normal">Kararsız</div>
+        <div id="stat-yellow" class="text-sm font-bold">0</div>
+      </div>
+      <div class="bg-slate-100 text-slate-700 p-1.5 rounded-lg border border-slate-200">
+        <div class="text-[10px] text-slate-500 font-normal">Temas Yok</div>
+        <div id="stat-gray" class="text-sm font-bold">0</div>
+      </div>
+    </div>
+
+    <!-- Arama ve Filtreleme -->
+    <div class="p-4 space-y-2 sticky top-[105px] z-20 bg-slate-100/95 backdrop-blur-sm border-b border-slate-200">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+        <input type="text" id="searchInput" placeholder="İsim, TC No, Sokak veya Bina No..."
+               class="w-full pl-9 pr-8 py-2 text-sm bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <!-- Filtre Butonları -->
+      <div class="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+        <button onclick="setFilter('ALL')" class="filter-chip px-3 py-1 rounded-full font-medium bg-slate-800 text-white whitespace-nowrap">Hepsi</button>
+        <button onclick="setFilter('BIZIM')" class="filter-chip px-3 py-1 rounded-full font-medium bg-white text-blue-600 border border-blue-200 whitespace-nowrap">Bizim Oy</button>
+        <button onclick="setFilter('KARARSIZ')" class="filter-chip px-3 py-1 rounded-full font-medium bg-white text-amber-600 border border-amber-200 whitespace-nowrap">Kararsız</button>
+        <button onclick="setFilter('RAKIP')" class="filter-chip px-3 py-1 rounded-full font-medium bg-white text-red-600 border border-red-200 whitespace-nowrap">Rakip</button>
+        <button onclick="setFilter('YOK')" class="filter-chip px-3 py-1 rounded-full font-medium bg-white text-slate-600 border border-slate-300 whitespace-nowrap">Görüşülmedi</button>
+      </div>
+    </div>
+
+    <!-- Liste -->
+    <main class="px-4 mt-2">
+      <div id="voterList" class="space-y-2.5"></div>
+      <div id="emptyNotice" class="hidden text-center py-12 text-slate-400 text-sm">Kayıt bulunamadı.</div>
+    </main>
+  </div>
+
+  <!-- SEKME 2: STRATEJİK ANALİZ VE ÇÖZÜM ÖNERİLERİ -->
+  <div id="section-analytics" class="hidden px-4 py-4 space-y-4">
+    <!-- Genel Durum Göstergesi -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <h2 class="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+        <i class="fa-solid fa-chess-knight text-indigo-600"></i> Mahalle Saha Hakimiyeti
+      </h2>
+      <div class="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex mb-2">
+        <div id="bar-blue" class="bg-blue-600 h-full transition-all duration-500" style="width: 0%"></div>
+        <div id="bar-yellow" class="bg-amber-400 h-full transition-all duration-500" style="width: 0%"></div>
+        <div id="bar-red" class="bg-red-500 h-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between text-[11px] text-slate-500">
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span> Bizim: <b id="lbl-blue">%0</b></span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Kararsız: <b id="lbl-yellow">%0</b></span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span> Rakip: <b id="lbl-red">%0</b></span>
+      </div>
+    </div>
+
+    <!-- Dinamik Strateji & Eylem Kartları -->
+    <div id="strategyCards" class="space-y-3">
+      <!-- Stratejik Tavsiyeler JS ile Eklenir -->
+    </div>
+  </div>
+
+  <script>
+    // Renk ve Eğilim Kodları
+    // BIZIM: Mavi, RAKIP: Kırmızı, KARARSIZ: Sarı, YOK: Gri
+    let voters = [];
+    let activeFilter = 'ALL';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const stored = localStorage.getItem('saha_hazirun_data');
+      if (stored) {
+        voters = JSON.parse(stored);
+        refreshStats();
+        renderVoters();
+      }
+    });
+
+    // Excel Okuma
+    document.getElementById('excelInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        const parsed = [];
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          const sno = parseInt(r[0]);
+          const tc = String(r[1] || '').trim();
+
+          if (!isNaN(sno) && tc.length >= 10) {
+            parsed.push({
+              sno: sno,
+              tc: tc,
+              soyad: String(r[2] || '').trim(),
+              ad: String(r[3] || '').trim(),
+              dyili: r[4] || '',
+              baba: String(r[5] || '').trim(),
+              adres: String(r[6] || '').trim(),
+              egilim: 'YOK', // Başlangıç durumu: Temas yok
+              not: '',
+              gorusmeZamani: null
+            });
+          }
+        }
+
+        if (parsed.length > 0) {
+          voters = parsed;
+          saveData();
+          refreshStats();
+          renderVoters();
+          alert(`${parsed.length} seçmen sisteme aktarıldı.`);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    function setEgilim(sno, yeniEgilim) {
+      const v = voters.find(x => x.sno === sno);
+      if (!v) return;
+
+      v.egilim = v.egilim === yeniEgilim ? 'YOK' : yeniEgilim;
+      v.gorusmeZamani = v.egilim !== 'YOK' ? new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : null;
+
+      saveData();
+      refreshStats();
+      renderVoters();
+    }
+
+    function saveData() {
+      localStorage.setItem('saha_hazirun_data', JSON.stringify(voters));
+    }
+
+    function refreshStats() {
+      const total = voters.length || 1;
+      const countBlue = voters.filter(v => v.egilim === 'BIZIM').length;
+      const countRed = voters.filter(v => v.egilim === 'RAKIP').length;
+      const countYellow = voters.filter(v => v.egilim === 'KARARSIZ').length;
+      const countGray = voters.filter(v => v.egilim === 'YOK').length;
+
+      document.getElementById('stat-blue').innerText = countBlue;
+      document.getElementById('stat-red').innerText = countRed;
+      document.getElementById('stat-yellow').innerText = countYellow;
+      document.getElementById('stat-gray').innerText = countGray;
+
+      // Analiz Bölümü Yüzdeleri
+      const pBlue = Math.round((countBlue / total) * 100);
+      const pYellow = Math.round((countYellow / total) * 100);
+      const pRed = Math.round((countRed / total) * 100);
+
+      document.getElementById('bar-blue').style.width = pBlue + '%';
+      document.getElementById('bar-yellow').style.width = pYellow + '%';
+      document.getElementById('bar-red').style.width = pRed + '%';
+
+      document.getElementById('lbl-blue').innerText = `%${pBlue}`;
+      document.getElementById('lbl-yellow').innerText = `%${pYellow}`;
+      document.getElementById('lbl-red').innerText = `%${pRed}`;
+
+      generateStrategyRecommendations(countBlue, countRed, countYellow, countGray, total);
+    }
+
+    // Adayın Seçimi Kazanması İçin Dinamik Strateji Üretici
+    function generateStrategyRecommendations(blue, red, yellow, gray, total) {
+      const container = document.getElementById('strategyCards');
+      container.innerHTML = '';
+
+      const contacted = total - gray;
+      const targetWin = Math.floor(total / 2) + 1; // Salt çoğunluk
+      const needed = Math.max(0, targetWin - blue);
+
+      // Kart 1: Matematiksel Kazanma Hedefi
+      const mathCard = document.createElement('div');
+      mathCard.className = 'bg-white p-4 rounded-xl border border-indigo-100 shadow-sm';
+      mathCard.innerHTML = `
+        <div class="flex items-center gap-2 text-indigo-700 font-bold text-sm mb-1">
+          <i class="fa-solid fa-bullseye"></i> Zafer Eşiği Analizi
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Seçimi ilk turda garanti altına almak için gereken oy sayısı: <b class="text-slate-900">${targetWin}</b>.<br>
+          Mevcut net desteğiniz: <b class="text-blue-600">${blue}</b>. Zafer için gereken ek oy: <b class="text-indigo-600">${needed}</b>.
+        </p>
+      `;
+      container.appendChild(mathCard);
+
+      // Kart 2: Kararsız Havuzu Stratejisi
+      const decCard = document.createElement('div');
+      decCard.className = 'bg-white p-4 rounded-xl border border-amber-200 shadow-sm';
+      let decMsg = "";
+      if (yellow >= needed) {
+        decMsg = `Mevcut <b>${yellow}</b> kararsız üyenin <b>%${Math.round((needed/yellow)*100)}</b> kadarını ikna etmek seçimi tek başına kazandırmaya yetiyor. Bu gruba 2. tur özel ziyaret ekibi gönderilmelidir.`;
+      } else {
+        decMsg = `Kararsız havuzu (${yellow} kişi) hedefi tek başına karşılamıyor. Mutlaka henüz temas kurulmayan <b>${gray}</b> kişiye acil ulaşılmalıdır.`;
+      }
+      decCard.innerHTML = `
+        <div class="flex items-center gap-2 text-amber-600 font-bold text-sm mb-1">
+          <i class="fa-solid fa-scale-unbalanced"></i> Kararsız Tabanı Kazanma Planı
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed">${decMsg}</p>
+      `;
+      container.appendChild(decCard);
+
+      // Kart 3: Operasyonel Saha Eylem Tavsiyeleri
+      const actionCard = document.createElement('div');
+      actionCard.className = 'bg-slate-900 text-white p-4 rounded-xl shadow-md space-y-2';
+      actionCard.innerHTML = `
+        <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-list-check"></i> ADAYIN SAHA ÇALIŞMA PLANI
+        </div>
+        <ul class="text-xs text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed">
+          <li><b>Kırmızı Blok:</b> Rakip adaya kesin oy vereceğini belirten (${red} kişi) seçmenlere fazla zaman kaybetmeyin; tartışmaya girmeden geçin.</li>
+          <li><b>Mavi Blok (${blue} kişi):</b> Kampanyanın ana çekirdeği. Seçim günü sandığa eksiksiz gelmeleri için birer "Sandık İletişim Sorumlusu" belirlensin.</li>
+          <li><b>Gri Alan (${gray} kişi):</b> Henüz temas kurulmadı. İlk temas için aday bizzat değil, gençlik veya kadın kollarından bir ekip gönderip nabız ölçmelidir.</li>
+        </ul>
+      `;
+      container.appendChild(actionCard);
+    }
+
+    function renderVoters() {
+      const container = document.getElementById('voterList');
+      const query = document.getElementById('searchInput').value.trim().toLocaleLowerCase('tr-TR');
+      container.innerHTML = '';
+
+      const filtered = voters.filter(v => {
+        if (activeFilter !== 'ALL' && v.egilim !== activeFilter) return false;
+        if (!query) return true;
+        return (
+          v.ad.toLocaleLowerCase('tr-TR').includes(query) ||
+          v.soyad.toLocaleLowerCase('tr-TR').includes(query) ||
+          v.tc.includes(query) ||
+          v.adres.toLocaleLowerCase('tr-TR').includes(query) ||
+          String(v.sno) === query
+        );
+      });
+
+      if (filtered.length === 0) {
+        document.getElementById('emptyNotice').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('emptyNotice').classList.add('hidden');
+
+      // İlk 80 kaydı yükle (performans)
+      filtered.slice(0, 80).forEach(v => {
+        let borderClass = 'border-slate-200 bg-white';
+        if (v.egilim === 'BIZIM') borderClass = 'border-blue-400 bg-blue-50/40';
+        if (v.egilim === 'RAKIP') borderClass = 'border-red-400 bg-red-50/40';
+        if (v.egilim === 'KARARSIZ') borderClass = 'border-amber-400 bg-amber-50/40';
+
+        const card = document.createElement('div');
+        card.className = `p-3 rounded-xl border shadow-sm transition ${borderClass}`;
+        card.innerHTML = `
+          <div class="flex justify-between items-start mb-1.5">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">#${v.sno}</span>
+                <span class="font-bold text-slate-900 text-sm">${v.ad} ${v.soyad}</span>
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5">TC: ***${v.tc.slice(-4)} | Baba: ${v.baba} | D: ${v.dyili}</div>
+            </div>
+            ${v.gorusmeZamani ? `<span class="text-[10px] text-slate-400 font-mono">${v.gorusmeZamani}</span>` : ''}
+          </div>
+          <div class="text-[11px] text-slate-600 truncate mb-2.5">
+            <i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${v.adres}
+          </div>
+          
+          <!-- Hızlı Eğilim Seçim Butonları -->
+          <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-100">
+            <button onclick="setEgilim(${v.sno}, 'BIZIM')" class="py-1 text-[11px] font-semibold rounded ${v.egilim === 'BIZIM' ? 'bg-blue-600 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-blue-50'}">
+              <i class="fa-solid fa-thumbs-up mr-1"></i> Bizim
+            </button>
+            <button onclick="setEgilim(${v.sno}, 'KARARSIZ')" class="py-1 text-[11px] font-semibold rounded ${v.egilim === 'KARARSIZ' ? 'bg-amber-500 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-amber-50'}">
+              <i class="fa-solid fa-question mr-1"></i> Kararsız
+            </button>
+            <button onclick="setEgilim(${v.sno}, 'RAKIP')" class="py-1 text-[11px] font-semibold rounded ${v.egilim === 'RAKIP' ? 'bg-red-600 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-red-50'}">
+              <i class="fa-solid fa-thumbs-down mr-1"></i> Rakip
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function switchTab(tab) {
+      if (tab === 'list') {
+        document.getElementById('section-list').classList.remove('hidden');
+        document.getElementById('section-analytics').classList.add('hidden');
+        document.getElementById('tab-list-btn').className = 'py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white';
+        document.getElementById('tab-analytics-btn').className = 'py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-300';
+      } else {
+        document.getElementById('section-list').classList.add('hidden');
+        document.getElementById('section-analytics').classList.remove('hidden');
+        document.getElementById('tab-list-btn').className = 'py-1.5 text-xs font-bold rounded-md bg-slate-800 text-slate-300';
+        document.getElementById('tab-analytics-btn').className = 'py-1.5 text-xs font-bold rounded-md bg-indigo-600 text-white';
+      }
+    }
+
+    function setFilter(flt) {
+      activeFilter = flt;
+      document.querySelectorAll('.filter-chip').forEach(c => {
+        c.className = 'filter-chip px-3 py-1 rounded-full font-medium bg-white text-slate-600 border border-slate-300 whitespace-nowrap';
+      });
+      event.target.className = 'filter-chip px-3 py-1 rounded-full font-medium bg-slate-800 text-white whitespace-nowrap';
+      renderVoters();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', renderVoters);
+
+    function exportReport() {
+      if (voters.length === 0) return alert('Veri yok.');
+      const data = voters.map(v => ({
+        "Sıra": v.sno,
+        "Ad": v.ad,
+        "Soyad": v.soyad,
+        "T.C.": v.tc,
+        "Adres": v.adres,
+        "Saha Eğilimi": v.egilim,
+        "Temas Saati": v.gorusmeZamani || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Saha_Raporu");
+      XLSX.writeFile(wb, "Secim_Saha_Durum_Raporu.xlsx");
+    }
+  </script>
+</body>
+</html>
