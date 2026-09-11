@@ -381,5 +381,30 @@
       XLSX.writeFile(wb, "Secim_Saha_Durum_Raporu.xlsx");
     }
   </script>
+  // Sayfa açıldığında önce yerel hafızaya bakar, yoksa data.json'dan otomatik çeker
+window.addEventListener('DOMContentLoaded', async () => {
+  const stored = localStorage.getItem('saha_hazirun_data');
+  
+  if (stored) {
+    voters = JSON.parse(stored);
+    refreshStats();
+    renderVoters();
+  } else {
+    // Telefonda ilk açılışta veriyi otomatik yükler
+    try {
+      const response = await fetch('./data.json');
+      if (response.ok) {
+        voters = await response.json();
+        saveData(); // Cihaz hafızasına kaydeder
+        refreshStats();
+        renderVoters();
+      } else {
+        console.error('data.json yüklenemedi');
+      }
+    } catch (err) {
+      console.error('Veri çekme hatası:', err);
+    }
+  }
+});
 </body>
 </html>
